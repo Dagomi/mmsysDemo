@@ -38,8 +38,8 @@ Gst.init(None)
 
 #--- Select environment (True)/Simulation (False)
 SELECTOR = False
-#URLPRUEBAS = 'http://www.bok.net/dash/tears_of_steel/cleartext/stream.mpd'
-URLPRUEBAS = 'http://localhost/IIM/videos_dash/MMSYS/stream.mpd'
+URLPRUEBAS = 'http://dash.edgesuite.net/dash264/TestCases/1a/netflix/exMPD_BIP_TC1.mpd'
+#URLPRUEBAS = 'http://localhost/IIM/videos_dash/MMSYS/stream.mpd'
 # -- Varibles---
 UPDATEAXES = True #Activa la actualizacion de los ejes X de las graficas
 REGISTRO = 0 # Activa el registro de las variables monitorizadas ON = 1 ; OFF = 0
@@ -153,7 +153,7 @@ class GTK_Main(object):
         #UI
         self.window_group=Gtk.WindowGroup()
         window = Gtk.Window(Gtk.WindowType.TOPLEVEL)
-        window.set_title("DASH Client by IIM (UPV)")
+        window.set_title("DASH Client")
         window.set_default_size(800 , 600)
         window.connect("destroy", Gtk.main_quit, "WM destroy")
         window.set_border_width(10)
@@ -348,12 +348,25 @@ class GTK_Main(object):
         self.audioqueue.set_property ("low-percent",  10,)
         self.audioqueue.set_property ("max-size-time", BUFFERSIZE)
         
+        
+        
         self.audiodemuxer = Gst.ElementFactory.make("qtdemux", "audio_demuxer")
         self.audiodecoder = Gst.ElementFactory.make("aacparse", "audio_decoder")
         self.audioconv = Gst.ElementFactory.make("faad", "audio_converter")
         self.audiosink = Gst.ElementFactory.make("autoaudiosink", "audio-output")
         
         self.textoverlay = Gst.ElementFactory.make("textoverlay", "text")
+        
+        self.tee = Gst.ElementFactory.make("tee", "tee")
+        self.filesink = Gst.ElementFactory.make("filesink", "filesink")
+        self.encoder = Gst.ElementFactory.make("x264enc", "x264enc")
+        self.muxerfilesink = Gst.ElementFactory.make("mp4mux", "mp4mux")
+        self.queue_record = Gst.ElementFactory.make("queue", "queue_record");
+
+
+        
+        
+
  
         self.player.add(self.source)
         self.player.add(self.dashdemuxer)
@@ -369,6 +382,11 @@ class GTK_Main(object):
         self.player.add(self.videoconvert)
         
         self.player.add(self.textoverlay)
+        self.player.add(self.tee)
+        self.player.add(self.encoder)
+        self.player.add(self.muxerfilesink)
+        self.player.add(self.queue_record)
+        
         
         self.source.link(self.dashdemuxer)
         self.dashdemuxer.link(self.videodemuxer)
@@ -379,7 +397,12 @@ class GTK_Main(object):
         #self.videodecoder.link(self.videoconvert)
         self.videodecoder.link(self.videoconvert)
         self.videoconvert.link(self.textoverlay)
-        self.textoverlay.link(self.videosink)
+        self.textoverlay.link(self.tee)
+        self.tee.link(self.videosink)
+        
+        self.tee.link(self.encoder)
+        self.encoder(self.muxerfilesink)
+        self.movie_window(self.muxerfilesink)
         
         self.audioqueue.link(self.audiodecoder)
         self.audiodecoder.link(self.audioconv)
@@ -650,7 +673,7 @@ class GTK_Main(object):
         for index in range (0,len(REPRESENTATION),1):
             REPRESENTATIONATTRIB = REPRESENTATION[index].attrib
             self.BANDWITH_MPD.append(REPRESENTATIONATTRIB['bandwidth'])
-        print self.BANDWITH_MPD
+#         print self.BANDWITH_MPD
         
     def Algorithm (self):
         
@@ -667,34 +690,34 @@ class GTK_Main(object):
         #CPU 
         if self.cpuTreshold.get_text() == "":
             MAX_CPU     = 85
-            print "bufferTreshold is empty set as default: %s " %  MAX_CPU
+#             print "bufferTreshold is empty set as default: %s " %  MAX_CPU
         else:
             MAX_CPU = int(self.cpuTreshold.get_text())
-            print "bufferTreshold set as : %s " %  MAX_CPU
+#             print "bufferTreshold set as : %s " %  MAX_CPU
         
         #BATT TH1    
         if self.batteryVeryLowTreshold.get_text() == "":
             VERY_LOW_BATT_LOAD = 5
-            print "batteryVeryLowTreshold is empty as default: %s " %  VERY_LOW_BATT_LOAD 
+#             print "batteryVeryLowTreshold is empty as default: %s " %  VERY_LOW_BATT_LOAD 
         else:    
             VERY_LOW_BATT_LOAD = int(self.batteryVeryLowTreshold.get_text())   
-            print "batteryVeryLowTreshold set as: %s " %  VERY_LOW_BATT_LOAD 
+#             print "batteryVeryLowTreshold set as: %s " %  VERY_LOW_BATT_LOAD 
         
         #BATT TH2
         if self.batteryLowTreshold.get_text() == "":
             LOW_BATT_LOAD = 15
-            print "batteryLowTreshold is empty as default: %s " %  LOW_BATT_LOAD 
+#             print "batteryLowTreshold is empty as default: %s " %  LOW_BATT_LOAD 
         else:    
             LOW_BATT_LOAD = int(self.batteryLowTreshold.get_text())   
-            print "batteryLowTreshold set as: %s " %  LOW_BATT_LOAD 
+#             print "batteryLowTreshold set as: %s " %  LOW_BATT_LOAD 
         
         #BUFF            
         if self.bufferTreshold.get_text() == "":
             MIN_BUFFER      = 50
-            print "cpuTreshold is empty as default: %s " %  MIN_BUFFER   
+#             print "cpuTreshold is empty as default: %s " %  MIN_BUFFER   
         else:
             MIN_BUFFER = int(self.bufferTreshold.get_text())
-            print "cpuTreshold set as: %s " %  MIN_BUFFER   
+#             print "cpuTreshold set as: %s " %  MIN_BUFFER   
         
         
         #environment (at the momenr only simulated conditions)
@@ -789,20 +812,20 @@ class GTK_Main(object):
             #BW = (int(self.BW_Sim.get_value())*1024)
             
             self.prueba.insert(self.indice, (int(self.BW_Sim.get_value())*1024))
-            print self.indice
+#             print self.indice
             
             
             
             if self.MeanTreshold.get_text() == "":
                 factor_amoritguado = 2
-                print "Mean default: %s " %  factor_amoritguado 
+#                 print "Mean default: %s " %  factor_amoritguado 
             else:    
                 factor_amoritguado = int(self.MeanTreshold.get_text())
-                print "Mean set as: %s " %  factor_amoritguado 
+#                 print "Mean set as: %s " %  factor_amoritguado 
                 
             if (self.indice >= factor_amoritguado):
                 self.indice = 0
-                print self.prueba
+#                 print self.prueba
                 self.BW = float(sum(self.prueba))/len(self.prueba) if len(self.prueba) > 0 else float('nan')
                 print ("MEAN %s ") % self.BW
                 self.prueba = []
@@ -827,13 +850,13 @@ class GTK_Main(object):
                                 self.registro("QualityBW", self.SelectRepresentation)
                                 self.registro("BW_amortiguado", self.BW)
             
-                print self.SelectRepresentation
+#                 print self.SelectRepresentation
                 self.indice = 0
             self.indice += 1
     
     def previousSegmentQuality(self):
         if self.PLAY == 1:
-            print self.BANDWITH_MPD
+#             print self.BANDWITH_MPD
             print ("previousSegmentQuality")
             print ("indice calidad %s " ) % self.indice
             calidadactual = self.qindex
@@ -841,7 +864,7 @@ class GTK_Main(object):
             if calidadactual == 0 :
                 
                 self.SelectRepresentation =  int(self.BANDWITH_MPD[0])
-                print self.SelectRepresentation
+#                 print self.SelectRepresentation
                 self.dashdemuxer.set_property("bw-sim",self.SelectRepresentation)
                 print ("ya estoy en la mas baja")
                 self.registro("Quality", 0)
@@ -854,7 +877,7 @@ class GTK_Main(object):
                 else:
                     print ("Desciendo a %s " ) % calidadactual
                     self.SelectRepresentation =  int(self.BANDWITH_MPD[self.qindex - 1])
-                    print self.SelectRepresentation
+#                     print self.SelectRepresentation
                     self.dashdemuxer.set_property("bw-sim",self.SelectRepresentation)
                     self.registro("Quality", self.qindex - 1)
                     self.registro("QualityBW", self.SelectRepresentation)
